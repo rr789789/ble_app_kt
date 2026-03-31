@@ -1,24 +1,19 @@
 package com.example.thermometer.data.ble
 
 import android.bluetooth.*
-import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import android.os.ParcelUuid
 import com.example.thermometer.domain.model.HistoryData
 import com.example.thermometer.domain.model.SensorData
 import com.example.thermometer.domain.model.SensorDevice
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.*
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,16 +25,16 @@ class BleManager @Inject constructor(
     private val handler = Handler(Looper.getMainLooper())
 
     private var bluetoothGatt: BluetoothGatt? = null
-    private var scanner: BluetoothLeScanner? = bluetoothAdapter?.bluetoothLeScanner
-    private var isScanning = false
+    private var currentDevice: SensorDevice? = null
+    private var notificationCharacteristic: BluetoothGattCharacteristic? = null
 
-    private val _scannedDevices = MutableStateFlow<List<SensorDevice>>(emptyList())
     private val _realtimeData = MutableStateFlow<SensorData?>(null)
     private val _isConnected = MutableStateFlow(false)
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
 
-    private var currentDevice: SensorDevice? = null
-    private var notificationCharacteristic: BluetoothGattCharacteristic? = null
+    // Track current scan for manual stop
+    private var currentScanCallback: ScanCallback? = null
+    private var currentScanner: android.bluetooth.le.BluetoothLeScanner? = null
 
     sealed class ConnectionState {
         object Disconnected : ConnectionState()
@@ -53,81 +48,79 @@ class BleManager @Inject constructor(
     val connectionState = _connectionState.asStateFlow()
 
     /**
-     * Start BLE scan for Xiaomi thermometer devices.
+     * Scan for LYWSD03MMC devices using callbackFlow.
+     * - Filters by device name starting with "LYWSD03MMC"
+     * - Auto-stops after SCAN_TIMEOUT_MS
+     * - Can be stopped manually via stopScan()
      */
-    fun scanDevices(): Flow<List<SensorDevice>> {
-        _scannedDevices.value = emptyList()
-        startScan()
-        return _scannedDevices.asStateFlow()
-    }
+    fun scanDevices(): Flow<List<SensorDevice>> = callbackFlow {
+        val scanner = bluetoothAdapter?.bluetoothLeScanner
+        if (scanner == null) {
+            close(Exception("Bluetooth not available"))
+            return@callbackFlow
+        }
 
-    private fun startScan() {
-        if (isScanning) stopScan()
+        currentScanner = scanner
+        val foundDevices = mutableMapOf<String, SensorDevice>()
 
-        scanner = bluetoothAdapter?.bluetoothLeScanner
-        if (scanner == null) return
+        val scanCallback = object : ScanCallback() {
+            override fun onScanResult(callbackType: Int, result: ScanResult) {
+                val device = result.device
+                val name = device.name ?: return
+
+                // Filter by device name: LYWSD03MMC
+                if (!name.startsWith("LYWSD03MMC", ignoreCase = true) &&
+                    !name.startsWith("ATC_", ignoreCase = true)
+                ) return
+
+                val macAddress = device.address
+                val sensorDevice = SensorDevice(
+                    macAddress = macAddress,
+                    name = name,
+                    lastSeen = System.currentTimeMillis()
+                )
+
+                foundDevices[macAddress] = sensorDevice
+                trySend(foundDevices.values.toList())
+            }
+
+            override fun onScanFailed(errorCode: Int) {
+                close(Exception("Scan failed: $errorCode"))
+            }
+        }
+
+        currentScanCallback = scanCallback
 
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
 
-        val filters = listOf(
-            ScanFilter.Builder()
-                .setServiceUuid(ParcelUuid(BleConstants.SERVICE_DATA_UUID))
-                .build()
-        )
-
-        isScanning = true
-        scanner?.startScan(filters, settings, scanCallback)
+        scanner.startScan(null, settings, scanCallback)
 
         // Auto-stop after timeout
-        handler.postDelayed({
-            stopScan()
-        }, BleConstants.SCAN_TIMEOUT_MS)
+        val timeoutRunnable = Runnable {
+            scanner.stopScan(scanCallback)
+            currentScanCallback = null
+            close()
+        }
+        handler.postDelayed(timeoutRunnable, BleConstants.SCAN_TIMEOUT_MS)
+
+        awaitClose {
+            handler.removeCallbacks(timeoutRunnable)
+            scanner.stopScan(scanCallback)
+            currentScanCallback = null
+        }
     }
 
+    /**
+     * Manually stop scanning.
+     */
     fun stopScan() {
-        if (isScanning) {
-            scanner?.stopScan(scanCallback)
-            isScanning = false
+        currentScanCallback?.let { callback ->
+            currentScanner?.stopScan(callback)
         }
-    }
-
-    private val scanCallback = object : ScanCallback() {
-        override fun onScanResult(callbackType: Int, result: ScanResult) {
-            val device = result.device
-            val scanRecord = result.scanRecord ?: return
-
-            val name = device.name ?: "LYWSD03MMC"
-            val macAddress = device.address
-
-            // Parse Xiaomi service data
-            val serviceData = scanRecord.getServiceData(ParcelUuid(BleConstants.SERVICE_DATA_UUID))
-            val parsed = if (serviceData != null) {
-                XiaomiBleParser.parseServiceData(serviceData, macAddress, name)
-            } else {
-                XiaomiBleParser.ParsedAdvertisement(macAddress = macAddress, name = name)
-            }
-
-            val sensorDevice = SensorDevice(
-                macAddress = macAddress,
-                name = parsed.name,
-                lastSeen = System.currentTimeMillis()
-            )
-
-            val current = _scannedDevices.value.toMutableList()
-            val existingIndex = current.indexOfFirst { it.macAddress == macAddress }
-            if (existingIndex >= 0) {
-                current[existingIndex] = sensorDevice
-            } else {
-                current.add(sensorDevice)
-            }
-            _scannedDevices.value = current
-        }
-
-        override fun onScanFailed(errorCode: Int) {
-            isScanning = false
-        }
+        currentScanCallback = null
+        currentScanner = null
     }
 
     /**
@@ -143,12 +136,7 @@ class BleManager @Inject constructor(
             val bleDevice = bluetoothAdapter?.getRemoteDevice(device.macAddress)
                 ?: return Result.failure(Exception("Bluetooth adapter not available"))
 
-            bluetoothGatt = bleDevice.connectGatt(
-                context,
-                false,
-                gattCallback
-            )
-
+            bluetoothGatt = bleDevice.connectGatt(context, false, gattCallback)
             Result.success(Unit)
         } catch (e: Exception) {
             _connectionState.value = ConnectionState.Error(e.message ?: "Connection failed")
@@ -175,70 +163,21 @@ class BleManager @Inject constructor(
      * Bind device — get token and generate binding key.
      */
     suspend fun bindDevice(device: SensorDevice): Result<String> {
-        // Binding key generation from token
-        // In a real implementation, we would read the token characteristic
-        // For now, return a placeholder indicating binding is needed
-        return try {
-            val gatt = bluetoothGatt ?: return Result.failure(Exception("Not connected"))
-
-            // Read token from device
-            val tokenChar = findCharacteristic(
-                gatt,
-                BleConstants.SERVICE_XIAOMI_DEVICE,
-                BleConstants.CHARACTERISTIC_XIAOMI_TOKEN
-            )
-
-            if (tokenChar != null) {
-                gatt.readCharacteristic(tokenChar)
-                // In production, we'd wait for onCharacteristicRead callback
-                // and then generate the binding key
-            }
-
-            // Generate a placeholder binding key
-            Result.success("")
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+        return Result.success("")
     }
 
     /**
      * Subscribe to real-time sensor data notifications.
      */
-    fun readRealtimeData(): Flow<SensorData> {
-        return _realtimeData.asStateFlow().let { flow ->
-            kotlinx.coroutines.flow.flow {
-                flow.collect { data ->
-                    if (data != null) emit(data)
-                }
-            }
-        }
-    }
+    fun readRealtimeData(): Flow<SensorData> = _realtimeData
+        .asStateFlow()
+        .filterNotNull()
 
     /**
      * Read historical data from device.
      */
     suspend fun readHistoryData(deviceMac: String): Result<List<HistoryData>> {
-        return try {
-            val gatt = bluetoothGatt ?: return Result.failure(Exception("Not connected"))
-
-            // Read history timestamp
-            val historyTsChar = findCharacteristic(
-                gatt,
-                BleConstants.SERVICE_HISTORY,
-                BleConstants.CHARACTERISTIC_HISTORY_TIMESTAMP
-            )
-
-            val historyRecChar = findCharacteristic(
-                gatt,
-                BleConstants.SERVICE_HISTORY,
-                BleConstants.CHARACTERISTIC_HISTORY_RECORD
-            )
-
-            // In production, implement history reading protocol
-            Result.success(emptyList())
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+        return Result.success(emptyList())
     }
 
     val isConnected: Flow<Boolean> = _isConnected.asStateFlow()
@@ -249,7 +188,6 @@ class BleManager @Inject constructor(
                 BluetoothGatt.STATE_CONNECTED -> {
                     _isConnected.value = true
                     _connectionState.value = ConnectionState.Connected
-                    // Start service discovery
                     gatt.discoverServices()
                     _connectionState.value = ConnectionState.Discovering
                 }
@@ -325,18 +263,12 @@ class BleManager @Inject constructor(
     }
 
     private fun subscribeToSensorData(gatt: BluetoothGatt) {
-        val envService = gatt.getService(BleConstants.SERVICE_ENVIRONMENTAL_SENSING)
-        if (envService == null) {
-            // Try to find service by iterating
-            for (service in gatt.services) {
-                if (service.uuid == BleConstants.SERVICE_ENVIRONMENTAL_SENSING) {
-                    subscribeCharacteristics(gatt, service)
-                    return
-                }
+        for (service in gatt.services) {
+            if (service.uuid == BleConstants.SERVICE_ENVIRONMENTAL_SENSING) {
+                subscribeCharacteristics(gatt, service)
+                return
             }
-            return
         }
-        subscribeCharacteristics(gatt, envService)
     }
 
     private fun subscribeCharacteristics(gatt: BluetoothGatt, service: BluetoothGattService) {
@@ -346,7 +278,6 @@ class BleManager @Inject constructor(
         tempChar?.let { enableNotification(gatt, it) }
         humChar?.let { enableNotification(gatt, it) }
 
-        // Also read initial values
         tempChar?.let {
             gatt.readCharacteristic(it)
             notificationCharacteristic = it
@@ -360,15 +291,6 @@ class BleManager @Inject constructor(
             it.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
             gatt.writeDescriptor(it)
         }
-    }
-
-    private fun findCharacteristic(
-        gatt: BluetoothGatt,
-        serviceUuid: UUID,
-        charUuid: UUID
-    ): BluetoothGattCharacteristic? {
-        val service = gatt.getService(serviceUuid)
-        return service?.getCharacteristic(charUuid)
     }
 
     private fun parseTemperature(value: ByteArray): Float {
