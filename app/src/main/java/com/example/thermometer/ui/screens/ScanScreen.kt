@@ -34,7 +34,7 @@ fun ScanScreen(
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val allGranted = permissions.all { it }
+        val allGranted = permissions.values.all { it }
         if (allGranted) {
             viewModel.startScan()
         }
