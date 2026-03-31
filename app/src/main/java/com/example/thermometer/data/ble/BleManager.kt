@@ -146,8 +146,7 @@ class BleManager @Inject constructor(
             bluetoothGatt = bleDevice.connectGatt(
                 context,
                 false,
-                gattCallback,
-                BluetoothGatt.TRANSPORT_LE
+                gattCallback
             )
 
             Result.success(Unit)
