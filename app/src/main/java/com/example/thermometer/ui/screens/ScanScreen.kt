@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,7 +15,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.thermometer.domain.model.SensorDevice
@@ -30,19 +30,16 @@ fun ScanScreen(
     val isScanning by viewModel.isScanning.collectAsState()
     val scannedDevices by viewModel.scannedDevices.collectAsState()
     val error by viewModel.error.collectAsState()
-    val context = LocalContext.current
 
-    // Permission launcher
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val allGranted = permissions.values.all { it }
+        val allGranted = permissions.all { it }
         if (allGranted) {
             viewModel.startScan()
         }
     }
 
-    // Bluetooth enable launcher
     val bluetoothLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
@@ -75,11 +72,7 @@ fun ScanScreen(
                             bluetoothLauncher.launch(enableIntent)
                         }
                     }) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = "刷新",
-                            modifier = Modifier.size(24.dp)
-                        )
+                        Icon(Icons.Default.Refresh, contentDescription = "刷新")
                     }
                 }
             )
@@ -90,7 +83,6 @@ fun ScanScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Error message
             error?.let { msg ->
                 Snackbar(
                     modifier = Modifier.padding(16.dp),
@@ -100,7 +92,6 @@ fun ScanScreen(
                 }
             }
 
-            // Scanning indicator
             if (isScanning) {
                 LinearProgressIndicator(
                     modifier = Modifier
@@ -110,7 +101,6 @@ fun ScanScreen(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // Device list
             if (scannedDevices.isEmpty() && !isScanning) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -145,7 +135,12 @@ fun ScanScreen(
                     ) { device ->
                         DeviceListItem(
                             device = device,
-                            onClick = { onDeviceSelected(device.macAddress) }
+                            onClick = {
+                                // Save device to DB before navigating
+                                viewModel.selectDevice(device) { mac ->
+                                    onDeviceSelected(mac)
+                                }
+                            }
                         )
                     }
                 }

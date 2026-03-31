@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.thermometer.domain.model.SensorDevice
 import com.example.thermometer.domain.usecase.ScanDevicesUseCase
+import com.example.thermometer.domain.usecase.SaveDeviceUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -11,7 +12,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ScanViewModel @Inject constructor(
-    private val scanDevicesUseCase: ScanDevicesUseCase
+    private val scanDevicesUseCase: ScanDevicesUseCase,
+    private val saveDeviceUseCase: SaveDeviceUseCase
 ) : ViewModel() {
 
     private val _isScanning = MutableStateFlow(false)
@@ -36,6 +38,17 @@ class ScanViewModel @Inject constructor(
             }
 
             _isScanning.value = false
+        }
+    }
+
+    /**
+     * Stop scan, save device to DB, then navigate.
+     */
+    fun selectDevice(device: SensorDevice, onSaved: (String) -> Unit) {
+        viewModelScope.launch {
+            stopScan()
+            saveDeviceUseCase(device)
+            onSaved(device.macAddress)
         }
     }
 

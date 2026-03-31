@@ -44,34 +44,37 @@ class DeviceDetailViewModel @Inject constructor(
     val isReadingHistory: StateFlow<Boolean> = _isReadingHistory.asStateFlow()
 
     init {
-        loadDevice()
+        loadDeviceAndConnect()
     }
 
-    private fun loadDevice() {
+    private fun loadDeviceAndConnect() {
         viewModelScope.launch {
-            _device.value = getSavedDevicesUseCase.getByMac(deviceMac)
+            val saved = getSavedDevicesUseCase.getByMac(deviceMac)
+            _device.value = saved ?: SensorDevice(
+                macAddress = deviceMac,
+                name = "LYWSD03MMC"
+            )
+            connect()
         }
     }
 
     fun connect() {
-        val device = _device.value ?: return
+        val dev = _device.value ?: return
         viewModelScope.launch {
             _isConnecting.value = true
             _error.value = null
 
-            val result = if (device.isBound) {
-                connectDeviceUseCase(device)
+            val result = if (dev.isBound) {
+                connectDeviceUseCase(dev)
             } else {
-                connectDeviceUseCase.bindAndConnect(device)
+                connectDeviceUseCase.bindAndConnect(dev)
             }
 
             result.onSuccess {
                 _isConnected.value = true
                 _isConnecting.value = false
-                _device.value = if (!device.isBound) {
-                    getSavedDevicesUseCase.getByMac(deviceMac)
-                } else {
-                    device
+                if (!dev.isBound) {
+                    _device.value = getSavedDevicesUseCase.getByMac(deviceMac)
                 }
                 startReadingData()
             }.onFailure {

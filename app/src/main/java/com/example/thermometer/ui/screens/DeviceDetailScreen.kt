@@ -31,11 +31,8 @@ fun DeviceDetailScreen(
     val error by viewModel.error.collectAsState()
     val isReadingHistory by viewModel.isReadingHistory.collectAsState()
 
-    LaunchedEffect(deviceMac) {
-        if (!isConnected) {
-            viewModel.connect()
-        }
-    }
+    // ViewModel's init{} block auto-loads device and connects automatically.
+    // No need for LaunchedEffect to connect here.
 
     Scaffold(
         topBar = {
@@ -67,7 +64,6 @@ fun DeviceDetailScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Connection status
             ConnectionStatus(
                 isConnected = isConnected,
                 isConnecting = isConnecting,
@@ -76,7 +72,6 @@ fun DeviceDetailScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Error display
             error?.let { msg ->
                 Card(
                     colors = CardDefaults.cardColors(
@@ -96,7 +91,6 @@ fun DeviceDetailScreen(
                 }
             }
 
-            // Temperature display
             TemperatureDisplay(
                 temperature = sensorData?.temperature ?: 0f,
                 modifier = Modifier.padding(vertical = 16.dp)
@@ -104,7 +98,6 @@ fun DeviceDetailScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Humidity display
             HumidityDisplay(
                 humidity = sensorData?.humidity ?: 0f,
                 modifier = Modifier.padding(vertical = 16.dp)
@@ -112,7 +105,6 @@ fun DeviceDetailScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Additional info
             if (sensorData != null) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -128,7 +120,6 @@ fun DeviceDetailScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Action buttons
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
