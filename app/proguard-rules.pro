@@ -1,3 +1,4 @@
 # Add project specific ProGuard rules here.
 -keepattributes *Annotation*
--keep class com.example.thermometer.data.db.entity.** { *; }
+-keepattributes SourceFile,LineNumberTable
+-keep public class * extends java.lang.Exception

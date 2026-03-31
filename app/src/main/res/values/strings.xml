@@ -1,4 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">温度计</string>
+    <string name="app_name">小米温湿度</string>
+    <string name="no_devices_found">未发现设备</string>
+    <string name="scanning">正在扫描…</string>
+    <string name="connect">连接</string>
+    <string name="disconnect">断开</string>
+    <string name="temperature">温度</string>
+    <string name="humidity">湿度</string>
+    <string name="battery">电量</string>
+    <string name="history">历史数据</string>
+    <string name="no_history_data">暂无历史数据</string>
+    <string name="export_data">导出数据</string>
+    <string name="settings">设置</string>
+    <string name="device_info">设备信息</string>
+    <string name="refresh_rate">刷新频率</string>
+    <string name="temp_unit">温度单位</string>
+    <string name="celsius">摄氏度</string>
+    <string name="fahrenheit">华氏度</string>
 </resources>
