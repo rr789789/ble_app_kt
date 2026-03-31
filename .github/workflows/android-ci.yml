@@ -24,8 +24,8 @@ jobs:
         run: |
           mkdir -p gradle/wrapper
           curl -sL https://services.gradle.org/distributions/gradle-8.2-bin.zip -o /tmp/gradle.zip
-          unzip -j /tmp/gradle.zip 'gradle-8.2/lib/gradle-wrapper-*.jar' -d gradle/wrapper/
-          mv gradle/wrapper/gradle-wrapper-*.jar gradle/wrapper/gradle-wrapper.jar
+          unzip -jo /tmp/gradle.zip gradle-8.2/lib/plugins/gradle-wrapper-8.2.jar -d gradle/wrapper/
+          mv gradle/wrapper/gradle-wrapper-8.2.jar gradle/wrapper/gradle-wrapper.jar
           ls -la gradle/wrapper/
 
       - name: Grant execute permission for gradlew
@@ -70,8 +70,8 @@ jobs:
         run: |
           mkdir -p gradle/wrapper
           curl -sL https://services.gradle.org/distributions/gradle-8.2-bin.zip -o /tmp/gradle.zip
-          unzip -j /tmp/gradle.zip 'gradle-8.2/lib/gradle-wrapper-*.jar' -d gradle/wrapper/
-          mv gradle/wrapper/gradle-wrapper-*.jar gradle/wrapper/gradle-wrapper.jar
+          unzip -jo /tmp/gradle.zip gradle-8.2/lib/plugins/gradle-wrapper-8.2.jar -d gradle/wrapper/
+          mv gradle/wrapper/gradle-wrapper-8.2.jar gradle/wrapper/gradle-wrapper.jar
           ls -la gradle/wrapper/
 
       - name: Grant execute permission for gradlew
