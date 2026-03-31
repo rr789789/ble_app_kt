@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Thermometer body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,20C50.13,20 47,23.13 47,27L47,55.17C43.13,57.55 40.5,61.83 40.5,66.75C40.5,74.04 46.46,80 53.75,80C53.83,80 53.92,80 54,80C54.08,80 54.17,80 54.25,80C61.54,80 67.5,74.04 67.5,66.75C67.5,61.83 64.87,57.55 61,55.17L61,27C61,23.13 57.87,20 54,20Z" />
+    <!-- Mercury bulb -->
+    <path
+        android:fillColor="#F44336"
+        android:pathData="M54,72C57.31,72 60,69.31 60,66C60,62.69 57.31,60 54,60C50.69,60 48,62.69 48,66C48,69.31 50.69,72 54,72Z" />
+    <!-- Mercury column -->
+    <path
+        android:fillColor="#F44336"
+        android:pathData="M51,27L51,55.17C52.25,54.74 53.59,54.5 55,54.5C55.34,54.5 55.67,54.52 56,54.55L56,27Z" />
+    <!-- Temperature marks -->
+    <path
+        android:fillColor="#9E9E9E"
+        android:pathData="M63,30L67,30M63,37L67,37M63,44L67,44M63,51L67,51"
+        android:strokeWidth="1.5"
+        android:strokeColor="#9E9E9E" />
+</vector>
